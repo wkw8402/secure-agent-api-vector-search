@@ -1,0 +1,44 @@
+sources:
+  customer_records_data:
+    kind: "alloydb-postgres"
+    project: "<PROJECT_ID>"
+    region: "<REGION>"
+    cluster: "cymbal-cluster"
+    instance: "cymbal-instance"
+    database: "postgres"
+    user: "postgres"
+    password: "${DB_PASSWORD}"
+
+tools:
+  find_similar_customer_records:
+    kind: postgres-sql
+    source: customer_records_data
+    description: "Semantic search over insurance policies and articles."
+    parameters:
+      - name: query_text
+        type: string
+      - name: limit
+        type: integer
+    statement: |
+      SELECT id, title, abstract,
+             1 - (embedding('text-embedding-005', $1) <=> abstract_embeddings) AS similarity
+      FROM customer_records_data
+      ORDER BY embedding('text-embedding-005', $1) <=> abstract_embeddings
+      LIMIT $2;
+
+  get_record_by_id:
+    kind: postgres-sql
+    source: customer_records_data
+    description: "Retrieve a record by its unique ID."
+    parameters:
+      - name: record_id
+        type: string
+    statement: |
+      SELECT id, type, number, country, date, title, abstract
+      FROM customer_records_data
+      WHERE id = $1;
+
+toolsets:
+  customer_data_tools:
+    - find_similar_customer_records
+    - get_record_by_id

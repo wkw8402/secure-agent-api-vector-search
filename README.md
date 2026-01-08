@@ -99,7 +99,7 @@ Then grant permission to execute the embedding function:
 GRANT EXECUTE ON FUNCTION embedding TO postgres;
 ```
 
-### Why this matters (in plain English)
+### Why this matters
 
 * The **vector extension** lets Postgres store “meaning vectors” (embeddings) in a special column type.
 * The **embedding() function** is a helper that calls a model (via Vertex AI integration) to turn text into vectors.
@@ -191,7 +191,7 @@ USING ivfflat (abstract_embeddings vector_l2_ops)
 WITH (lists = 100);
 ```
 
-### In plain English
+### Index?
 
 An **index** is like a table of contents for fast lookup.
 For vector search, it helps you find “nearest neighbors” quickly even in large datasets.
@@ -229,7 +229,7 @@ Also grant yourself:
 
 * `roles/iam.serviceAccountUser` on that service account (so you can deploy as it)
 
-### In plain English
+### Service Account?
 
 A **service account** is a “program identity.”
 Instead of you logging in, Cloud Run uses that identity to access resources—only with the permissions you grant.
@@ -310,7 +310,7 @@ Save the internal service URL:
 export SECURE_API_URL="https://<your-cloud-run-service-url>"
 ```
 
-### In plain English
+### Terms!
 
 * **Cloud Run** runs your API without you managing servers.
 * **Ingress internal** means the service is not publicly accessible.

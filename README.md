@@ -1,6 +1,9 @@
 # Crack Insurance AI Agent
 > **Enterprise-grade AI agent for secure, semantic claims processing.**
 
+<img width="1024" height="559" alt="image" src="https://github.com/user-attachments/assets/c7e7b244-46a0-4847-80d7-569d2ab763e7" />
+
+
 This project implements a production-ready, secure **Retrieval-Augmented Generation (RAG)** architecture for the insurance industry. The "Crack Insurance" agent empowers adjusters to instantly retrieve complex policy details and similar case precedents using natural language—all without ever exposing the raw database directly to the LLM.
 
 ---
@@ -27,7 +30,20 @@ See the agent in action:
 
 The system follows a strict 3-tier architecture to decouple the Agent's reasoning from the Data's storage.
 
-![System Architecture](https://mermaid.ink/img/Z3JhcGggVEQKICAgIFVzZXJbIkFkanVzdGVyIl0gLS0+fE5hdHVyYWwgTGFuZ3VhZ2UgUXVlcnl8IEFnZW50WyJBREsgQWdlbnQgKEdlbWluaSAyLjUpIl0KICAgIHN1YmdyYXBoIFNlY3VyZVpvbmUgWyJTZWN1cmUgWm9uZSJdCiAgICAgICAgQWdlbnQgLS0+fFRvb2wgQ2FsbCAoSFRUUFMpfCBBUElbIlNlY3VyZSBUb29sIEdhdGV3YXkgKENsb3VkIFJ1bikiXQogICAgICAgIEFQSSAtLT58U1FMIFF1ZXJ5fCBEQlsoIkFsbG95REIgUG9zdGdyZXMiKV0KICAgIGVuZAo=)
+```
+Adjuster (User)
+        │
+        ▼
+ADK Agent (Gemini 2.5)
+        │
+        │  HTTPS Tool Call
+        ▼
+Secure Tool Gateway (Cloud Run)
+        │
+        │  SQL Query
+        ▼
+AlloyDB (Postgres)
+```
 
 ### 1. Data Layer: AlloyDB (PostgreSQL)
 *   **Vector Embeddings**: Uses `pgvector` to store 768-dimensional embeddings of policy abstracts.

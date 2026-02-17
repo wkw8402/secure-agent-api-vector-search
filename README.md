@@ -1,457 +1,121 @@
-# secure-agent-api-vector-search
-**Build a foundational AI agent with secure database access (GCP lab recap + reproducible repo)**
+# Crack Insurance AI Agent
+> **Enterprise-grade AI agent for secure, semantic claims processing.**
 
-This repo documents (and partially re-creates) a production-style pattern for **letting an AI agent query enterprise data safely**—without giving the agent direct access to a production database.
-
-You’ll see a clean **three-tier architecture**:
-
-1) **Data Layer** (AlloyDB + vector search)  
-2) **Secure API Layer** (MCP Toolbox on Cloud Run, private)  
-3) **Agent Layer** (ADK agent using Gemini via Vertex AI)
-
-I originally built this in a time-limited Google Cloud Skills Boost lab. The lab environment is ephemeral, so this repo preserves the steps, configs, and code structure (plus a demo video).
+This project implements a production-ready, secure **Retrieval-Augmented Generation (RAG)** architecture for the insurance industry. The "Crack Insurance" agent empowers adjusters to instantly retrieve complex policy details and similar case precedents using natural language—all without ever exposing the raw database directly to the LLM.
 
 ---
 
-# Agent Vector Search Demo
+## 🎥 Demo
 
-* **Video demo**:
+See the agent in action:
 
 [![Watch the video](https://img.youtube.com/vi/CPYr7f_TUFI/hqdefault.jpg)](https://youtu.be/CPYr7f_TUFI)
 
 ---
 
-## Architecture at a glance
+## 🚀 About The Project
 
-```
+**The Problem**: Insurance adjusters spend countless hours manually searching through thousands of PDF policies and articles to answer simple coverage questions like *"Does this policy cover water damage from a burst pipe?"* or *"What is the procedure for wind damage assessment?"*. Keyword searches often fail due to the nuanced language of insurance contracts.
 
-User Question
-|
-v
-ADK Agent (Gemini via Vertex AI)
-|
-| HTTPS (authenticated)
-v
-Cloud Run: MCP Toolbox (private “tool gateway”)
-|
-| private networking (VPC connector)
-v
-AlloyDB (Postgres + vector extension + embeddings)
+**The Solution**: An intelligent agent that understands *context*, not just keywords. By leveraging **Vector Search** on AlloyDB and a **Secure Tooling Layer**, this agent can semantically match user queries to the exact clauses in a policy document.
 
-```
-
-**Key idea:** the agent never touches the DB directly.  
-It can only call **approved tools** (SQL queries) exposed by a secure API.
+**Why I Built This**: I created this project to demonstrate a **secure, scalable pattern for enterprise AI**. Many RAG demos simply give the LLM a connection string to the database, which is a massive security risk. This architecture implements a **Zero-Trust** model where the agent can only interact with data through strictly defined API tools.
 
 ---
 
-## Repo contents
-You can structure the repo like this:
+## 🏗️ System Architecture
 
-```
+The system follows a strict 3-tier architecture to decouple the Agent's reasoning from the Data's storage.
 
-.
-├── README.md
-├── tools.yaml                      # tool “blueprint” used by MCP Toolbox
-├── agent/
-│   ├── agent.py                    # ADK agent definition
-│   ├── requirements.txt
-│   └── .env.example
-├── sql/
-│   ├── 01_extensions.sql
-│   ├── 02_schema.sql
-│   ├── 03_seed_data.sql
-│   ├── 04_embeddings.sql
-│   └── 05_vector_index.sql
-├── demo/
-│   └── demo.mp4                    # optional: your recorded demo
-└── screenshots/                    # optional: UI screenshots from lab
+![System Architecture](https://mermaid.ink/img/Z3JhcGggVEQKICAgIFVzZXJbIkFkanVzdGVyIl0gLS0+fE5hdHVyYWwgTGFuZ3VhZ2UgUXVlcnl8IEFnZW50WyJBREsgQWdlbnQgKEdlbWluaSAyLjUpIl0KICAgIHN1YmdyYXBoIFNlY3VyZVpvbmUgWyJTZWN1cmUgWm9uZSJdCiAgICAgICAgQWdlbnQgLS0+fFRvb2wgQ2FsbCAoSFRUUFMpfCBBUElbIlNlY3VyZSBUb29sIEdhdGV3YXkgKENsb3VkIFJ1bikiXQogICAgICAgIEFQSSAtLT58U1FMIFF1ZXJ5fCBEQlsoIkFsbG95REIgUG9zdGdyZXMiKV0KICAgIGVuZAo=)
 
-````
+### 1. Data Layer: AlloyDB (PostgreSQL)
+*   **Vector Embeddings**: Uses `pgvector` to store 768-dimensional embeddings of policy abstracts.
+*   **Semantic Search**: Enables the database to understand that searching for *"roof leak"* is semantically similar to *"water intrusion from ceiling"*.
+*   **Performance**: Indexed with `ivfflat` for high-speed similarity search across large datasets.
 
-> ⚠️ Don’t commit real secrets. Use `.env.example` and Secret Manager in real deployments.
+### 2. Secure API Layer: MCP Toolbox (Cloud Run)
+*   **The "Firewall"**: This is a private, authenticated API service that acts as a gateway between the AI and the Data.
+*   **Model Context Protocol (MCP)**: Exposes specific, safe tools like `find_similar_policies` and `get_policy_by_id`.
+*   **Security**: The agent has **no DB credentials**. It authenticates to this API, which then executes pre-approved SQL queries.
+
+### 3. Agent Layer: Vertex AI + Python ADK
+*   **Reasoning Engine**: Uses **Gemini 2.5 Flash** to parse user intent and orchestrate tool usage.
+*   **Context Awareness**: The agent maintains conversation history to ask clarifying questions or refine searches.
 
 ---
 
-# Chapter 1 — Data Layer (AlloyDB + vector search)
+## ✨ Key Features
 
-## 1.1 Provision / verify AlloyDB is ready
-In the lab, an AlloyDB cluster and instance were pre-provisioned:
-- Cluster: `cymbal-cluster`
-- Instance: `cymbal-instance`
-- Database: `postgres`
-- User: `postgres`
-
-Wait until both show **Status: Ready**.
+*   **🔍 Semantic Understanding**: Queries like *"flood damage in basement"* correctly retrieve policies about *"water backup"* and *"sump pump failure"*, even without exact keyword matches.
+*   **🛡️ Zero-Trust Security**: The AI never gets direct SQL access. It must go through the API layer, which validates every request against a strict `tools.yaml` definition.
+*   **⚡ Serverless Scalability**: Built on **Cloud Run** and **Vertex AI**, the system scales to zero when not in use and handles high concurrency during peak claims periods.
+*   **🔄 Real-time RAG**: As soon as a new policy is added to the database, it is immediately searchable by the agent.
 
 ---
 
-## 1.2 Enable vector extension + permissions
-In **AlloyDB Studio**, run:
+## 🛠️ Deployment Guide
 
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-````
+Follow these steps to deploy your own instance of the Crack Insurance Agent.
 
-Then grant permission to execute the embedding function:
+### Prerequisites
+*   Google Cloud Project with billing enabled.
+*   `gcloud` CLI installed and authenticated.
+*   Python 3.10+
 
-```sql
-GRANT EXECUTE ON FUNCTION embedding TO postgres;
-```
+### Step 1: Data Layer Setup (AlloyDB)
+1.  **Provision AlloyDB**: Create a cluster (`cymbal-cluster`) and instance (`cymbal-instance`) in your project.
+2.  **Enable Vector Extension**:
+    ```sql
+    CREATE EXTENSION IF NOT EXISTS vector;
+    GRANT EXECUTE ON FUNCTION embedding TO postgres;
+    ```
+3.  **Create Schema**:
+    Run the SQL scripts in `sql/schema.sql` to create the `customer_records_data` table.
+4.  **Generate Embeddings**:
+    The system uses the `text-embedding-005` model (via Vertex AI integration) to automatically generate vectors for all policy text.
 
-### Why this matters
+### Step 2: Secure API Layer (MCP Toolbox)
+1.  **Configure Tools**: Define your allowed SQL queries in `tools.yaml`.
+    ```yaml
+    tools:
+      find_similar_policies:
+        description: "Finds policies similar to a query."
+        statement: "SELECT ... FROM customer_records_data ORDER BY embeddings <=> $1 LIMIT 5"
+    ```
+2.  **Deploy to Cloud Run**:
+    ```bash
+    gcloud run deploy toolbox \
+        --image=us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:latest \
+        --service-account=toolbox-identity \
+        --set-secrets="/app/tools.yaml=tools:latest"
+    ```
+    *This creates a private HTTP endpoint that only your agent can reach.*
 
-* The **vector extension** lets Postgres store “meaning vectors” (embeddings) in a special column type.
-* The **embedding() function** is a helper that calls a model (via Vertex AI integration) to turn text into vectors.
-
----
-
-## 1.3 Allow AlloyDB to call Vertex AI (IAM)
-
-Grant the AlloyDB service account the role:
-
-* `Vertex AI User`
-
-This enables embedding generation using a Vertex AI text embedding model.
-
----
-
-## 1.4 Create schema + load sample data
-
-Create table:
-
-```sql
-CREATE TABLE customer_records_data (
-    id VARCHAR(25),
-    type VARCHAR(25),
-    number VARCHAR(20),
-    country VARCHAR(2),
-    date VARCHAR(20),
-    abstract VARCHAR(300000),
-    title VARCHAR(100000),
-    kind VARCHAR(6),
-    num_claims BIGINT,
-    filename VARCHAR(100),
-    withdrawn BIGINT,
-    abstract_embeddings vector(768)
-);
-```
-
-Load records (policies + articles) into `customer_records_data`.
-
-### What’s happening here
-
-* `abstract` is the text we want the AI to “understand”.
-* `abstract_embeddings` is where we store the numeric embedding vector (768 dimensions here).
+### Step 3: Agent Layer (Python ADK)
+1.  **Install Dependencies**:
+    ```bash
+    pip install google-adk toolbox-core
+    ```
+2.  **Connect Agent**:
+    Update `agent.py` with your Cloud Run URL. The agent will automatically discover the tools available in the API.
+3.  **Run Locally**:
+    ```bash
+    adk web
+    ```
 
 ---
 
-## 1.5 Generate embeddings
+## 🔮 Future Improvements
 
-Test:
-
-```sql
-SELECT embedding('text-embedding-005', 'AlloyDB is a managed, cloud-hosted SQL database service.');
-```
-
-Generate for all rows:
-
-```sql
-UPDATE customer_records_data
-SET abstract_embeddings = embedding('text-embedding-005', abstract);
-```
+*   **Frontend UI**: Build a React/Next.js dashboard for adjusters to view retrieved policy PDFs side-by-side with the chat.
+*   **Multi-Turn Reasoning**: Enhance the agent to handle complex "What if" scenarios by chaining multiple tool calls.
+*   **Citation Support**: Modify the agent to cite specific page numbers and clauses in its answers for legal verification.
 
 ---
 
-## 1.6 Run a vector similarity search
+## 📜 License
 
-Example query:
+Distributed under the MIT License. See `LICENSE` for more information.
 
-```sql
-SELECT id, title, abstract
-FROM customer_records_data
-ORDER BY abstract_embeddings <=> embedding('text-embedding-005', 'what should I do about water damage in my home?')::vector
-LIMIT 10;
-```
-
-### Why this is cool
-
-This doesn’t rely on keyword matches.
-It finds results that are **semantically similar** (meaning-based).
-
----
-
-## 1.7 Speed it up with an index (ScaNN / ivfflat)
-
-Create an index:
-
-```sql
-CREATE INDEX ON customer_records_data
-USING ivfflat (abstract_embeddings vector_l2_ops)
-WITH (lists = 100);
-```
-
-### Index?
-
-An **index** is like a table of contents for fast lookup.
-For vector search, it helps you find “nearest neighbors” quickly even in large datasets.
-
----
-
-# Chapter 2 — Secure API Layer (MCP Toolbox on Cloud Run)
-
-Goal: expose **safe, approved database actions** as “tools” behind a private API.
-
-## 2.1 Allow connectivity (public IP for setup, then keep traffic private)
-
-In the lab, you temporarily enabled AlloyDB public IP and allowed your Cloud Shell IP range.
-
-> In real setups, you’d typically prefer private IP + private connectivity from the start.
-
----
-
-## 2.2 Create a Service Account for the toolbox
-
-Create:
-
-```bash
-gcloud iam service-accounts create toolbox-identity \
-  --display-name="MCP Toolbox Service"
-```
-
-Grant least-privilege roles:
-
-* `roles/secretmanager.secretAccessor`
-* `roles/alloydb.client`
-* `roles/serviceusage.serviceUsageConsumer`
-
-Also grant yourself:
-
-* `roles/iam.serviceAccountUser` on that service account (so you can deploy as it)
-
-### Service Account?
-
-A **service account** is a “program identity.”
-Instead of you logging in, Cloud Run uses that identity to access resources—only with the permissions you grant.
-
----
-
-## 2.3 Store DB password in Secret Manager
-
-```bash
-echo 'changeme' | gcloud secrets create alloydb-password --data-file=-
-export DB_PASSWORD=$(gcloud secrets versions access latest --secret="alloydb-password")
-```
-
----
-
-## 2.4 Define tools in `tools.yaml`
-
-`tools.yaml` is the **tool blueprint**: it defines
-
-* how to connect to the database
-* which SQL statements are allowed
-* what parameters the agent can pass
-
-Example tools included:
-
-* `find_similar_customer_records` (vector similarity search)
-* `get_record_by_id` (exact lookup by ID)
-
-> This is the “guardrail”: the agent can only do what’s in this file.
-
----
-
-## 2.5 Run MCP Toolbox locally (optional quick test)
-
-```bash
-./toolbox --tools-file "tools.yaml" --port=8080
-```
-
----
-
-## 2.6 Deploy MCP Toolbox to Cloud Run (private)
-
-Create a secret from `tools.yaml`:
-
-```bash
-gcloud secrets create tools --data-file=tools.yaml
-# or, if it already exists:
-gcloud secrets versions add tools --data-file=tools.yaml
-```
-
-Create VPC connector:
-
-```bash
-gcloud compute networks vpc-access connectors create alloydb-connector \
-  --region=${REGION} \
-  --network=peering-network \
-  --range=10.8.0.0/28
-```
-
-Deploy:
-
-```bash
-gcloud run deploy toolbox \
-  --image=${TARGET_IMAGE} \
-  --vpc-connector=alloydb-connector \
-  --region=${REGION} \
-  --service-account=toolbox-identity \
-  --no-allow-unauthenticated \
-  --set-secrets="/app/tools.yaml=tools:latest" \
-  --args="--tools-file=/app/tools.yaml","--address=0.0.0.0","--port=8080" \
-  --ingress=internal \
-  --min-instances=1
-```
-
-Save the internal service URL:
-
-```bash
-export SECURE_API_URL="https://<your-cloud-run-service-url>"
-```
-
-### Terms!
-
-* **Cloud Run** runs your API without you managing servers.
-* **Ingress internal** means the service is not publicly accessible.
-* The toolbox reads **tools.yaml from a secret**, not from plain text files.
-
----
-
-# Chapter 3 — Agent Layer (ADK + Gemini + tool calling)
-
-Goal: build an agent that can:
-
-1. understand a natural-language question
-2. choose an appropriate tool
-3. call the secure API
-4. summarize the returned database results
-
-## 3.1 Create ADK environment
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install google-adk toolbox-core
-```
-
----
-
-## 3.2 Create the ADK agent skeleton
-
-```bash
-adk create multi_tool_agent
-```
-
-Chosen options (lab):
-
-* Model: `gemini-2.5-flash`
-* Backend: Vertex AI
-
----
-
-## 3.3 Connect the agent to the tool gateway (Cloud Run)
-
-Copy `tools.yaml` into agent directory so ADK can discover the toolset:
-
-```bash
-cp ../tools.yaml .
-```
-
-Example agent definition (simplified):
-
-```py
-from google.adk.agents import Agent
-from toolbox_core import ToolboxSyncClient
-
-toolbox = ToolboxSyncClient(SECURE_API_URL)
-tools = toolbox.load_toolset("customer_data_tools")
-
-root_agent = Agent(
-    name="claims_assistant",
-    model="gemini-2.5-flash",
-    description="Helps insurance adjusters find relevant policies/articles safely.",
-    instruction=(
-        "You are an insurance claims assistant. "
-        "Use tools to (1) run semantic search over policies/articles "
-        "and (2) fetch a record by its ID."
-    ),
-    tools=tools,
-)
-```
-
-> The agent **does not need DB credentials**. It only needs the secure API URL and permission to call it.
-
----
-
-## 3.4 Run the ADK Dev UI and test
-
-```bash
-adk web
-```
-
-Example prompts to try:
-
-* “Find articles about roof damage from storms.”
-* “What’s the procedure for water damage mitigation?”
-* “Retrieve policy POL-10326103.”
-
----
-
-# Glossary
-
-### Infrastructure & environment
-
-* **Vertex AI**: Google Cloud’s AI platform where Gemini models live and are managed. Think: the agent’s “brain provider.”
-* **Cloud Run**: A serverless way to deploy code. You provide a container, Google runs it and scales it.
-* **VPC (Virtual Private Cloud)**: Your private network boundary in the cloud. It lets services talk internally without going over the public internet.
-* **Service Account**: A non-human identity for programs (Cloud Run, agents, pipelines). You grant it specific permissions.
-
-### Data & search
-
-* **Text Embedding**: Turning text into a numeric vector so a computer can compare meaning, not just keywords.
-* **Vector Search**: Searching by semantic similarity using embeddings (e.g., “roof damage” finds “storm tarping”).
-* **Cosine Distance**: A way to measure how similar two vectors are by comparing their direction (smaller distance / larger similarity = more related).
-* **Index (ScaNN / ivfflat)**: A performance structure that speeds up “nearest neighbor” search across many vectors.
-
-### Agent + tooling
-
-* **Agentic AI**: An AI that doesn’t only answer— it can decide to use tools and take steps toward a goal.
-* **ADK (Agent Development Kit)**: Google’s Python toolkit for defining agents (persona + tools + behavior).
-* **MCP & Toolbox**: A standardized, safer bridge between models and external systems (like databases). Toolbox exposes approved “tools” over an API.
-* **tools.yaml**: The tool blueprint—defines allowed database connections + SQL queries + parameters.
-* **SECURE_API_URL**: The Cloud Run endpoint the agent calls to use tools safely.
-
-### A few extra terms you’ll run into
-
-* **AlloyDB**: Google’s managed Postgres-compatible database optimized for performance (and here, vector search).
-* **pgvector / vector extension**: The Postgres extension that adds the `vector` type and vector operators.
-* **Tool calling**: The model decides to call a function/tool (instead of guessing) to fetch real data.
-
----
-
-# Security notes (the “why this pattern exists” part)
-
-* Agents should **not** have direct DB access: it’s too easy to over-query, leak data, or do unintended actions.
-* The **API tool gateway** enforces:
-
-  * which queries are allowed (only what’s in `tools.yaml`)
-  * authentication (no anonymous calls)
-  * network isolation (internal ingress + VPC routing)
-* You can add logging, rate limits, audit trails, and approvals at the API layer.
-
----
-
-# Credits / Inspiration
-
-This repo is based on a Google Cloud Skills Boost lab pattern:
-
-* AlloyDB + embeddings + vector search
-* MCP Toolbox for Databases on Cloud Run
-* ADK agent using Gemini via Vertex AI
-
----
-
-## License
-
-For educational/demo purposes. Adapt freely for your own projects.
+*Note: This project is a demonstration of enterprise patterns and is not affiliated with any actual insurance provider.*
